@@ -39,12 +39,13 @@ public class Spieler {
     }
 
     Thread listenerThread;
+    Thread consolelistenThread;
     public void start() {
         // Startet einen Thread, der auf eingehende Nachrichten lauscht
         listenerThread = new Thread(this::listen);
         listenerThread.start();
 
-        Thread consolelistenThread = new Thread(this::consolelisten);
+        consolelistenThread = new Thread(this::consolelisten);
         consolelistenThread.start();
 
         // Registriert den Spieler beim Croupier
@@ -76,6 +77,12 @@ public class Spieler {
         String aktion = message.getString("type");
 
         switch (aktion) {
+            case "NACK":
+                System.out.println("Tisch ist voll. Spieler kann nicht beitreten. Schließe Programm \n");
+                listenerThread.interrupt(); // Stoppe den Listener-Thread
+                consolelistenThread.interrupt(); // Stoppe den Konsolen-Listener-Thread
+                System.exit(0);
+                break;
             case "ACK":
                 System.out.println("Erfolgreich als Spieler registriert. Warte auf Spielstart.\n");
                 break;
@@ -101,9 +108,7 @@ public class Spieler {
 
             case "your_turn":
                 System.out.println("Ich bin am Zug.\n");
-                // Die Nachricht sollte die Hand-ID enthalten, falls gesplittet wurde
                 int handIndex = message.optInt("handIndex", 0);
-                // Die Nachricht sollte auch die offenen Karten des Croupiers enthalten
                 JSONObject croupierKarteJSON = message.getJSONObject("croupier_card");
                 Card croupierKarte = new Card(croupierKarteJSON.getString("rank"), croupierKarteJSON.getString("suit"));
 
@@ -192,7 +197,7 @@ public class Spieler {
         if (answer) {
             // Wenn der Spieler aufgibt, wird der halbe Einsatz zurückerstattet
             System.out.println("Aufgabe akzeptiert. Halber Einsatz wird zurückerstattet. Warte auf die nächste Runde.\n");
-            this.guthaben += this.haende.get(0).getEinsatz() / 2; // Halber Einsatz zurück
+            //this.guthaben += this.haende.get(0).getEinsatz() / 2; // Halber Einsatz zurück
             this.haende.clear(); // Hände für die nächste Runde leeren
         } else {
             System.out.println("Aufgabe abgelehnt.\n");
@@ -238,7 +243,6 @@ public class Spieler {
                 break;
             case "double down":
                 if (this.guthaben >= this.haende.get(handIndex).getEinsatz()) {
-                    this.guthaben -= this.haende.get(handIndex).getEinsatz(); // Verdopplung des Einsatzes
                     this.haende.get(handIndex).setEinsatz(this.haende.get(handIndex).getEinsatz() * 2);
                     sendMessage(croupierAddress, croupierPort, actionMessage);
                     System.out.println("Double Down ausgeführt.\n");
