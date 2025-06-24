@@ -75,7 +75,7 @@ public class Spieler {
                 Scanner scanner = new Scanner(System.in);
                 String input = scanner.nextLine().trim();
                 int bet_amount =input.isEmpty() ? 100 : Integer.parseInt(input);
-                this.haende.getFirst().setEinsatz(bet_amount); // Speichern des aktuellen Einsatzes
+                this.haende.get(0).setEinsatz(bet_amount); // Speichern des aktuellen Einsatzes
                 PlaceBet(bet_amount);
                 break;
 
@@ -103,7 +103,7 @@ public class Spieler {
 
             case "offer_surrender":
                 System.out.println("Angebot zum Aufgeben erhalten. Möchten Sie aufgeben? (j/n)\n aktuelles Guthaben: " +
-                        this.guthaben+ ". Aktueller Einsatz "+ this.haende.getFirst().getEinsatz() + "\n aktuelle Hand: " + this.haende);
+                        this.guthaben+ ". Aktueller Einsatz "+ this.haende.get(0).getEinsatz() + "\n aktuelle Hand: " + this.haende);
                 Scanner scannerSurrender = new Scanner(System.in);
                 String surrenderInput = scannerSurrender.nextLine().trim();
                 if (surrenderInput.equalsIgnoreCase("j")) {
@@ -149,7 +149,7 @@ public class Spieler {
         surrenderMessage.put("answer", answer ? "yes" : "no");
         sendMessage(croupierAddress, croupierPort, surrenderMessage);
         System.out.println("Aufgabe akzeptiert. Halber Einsatz wird zurückerstattet.");
-        this.guthaben += this.haende.getFirst().getEinsatz() / 2; // Halber Einsatz zurück
+        this.guthaben += this.haende.get(0).getEinsatz() / 2; // Halber Einsatz zurück
     }
 
     private void PlaceBet(int einsatz) {
@@ -248,7 +248,7 @@ public class Spieler {
 
             System.out.println("Geben Sie den Port ein, auf dem der Spieler lauschen soll (Standard: 5002 (enter drücken):");
             String spielerPortInput = scanner.nextLine().trim();
-            int spielerPort = spielerPortInput.isEmpty() ? 5001 : Integer.parseInt(spielerPortInput);
+            int spielerPort = spielerPortInput.isEmpty() ? 5002 : Integer.parseInt(spielerPortInput);
 
             System.out.println("Geben Sie das Startkapital an (Standard: 1000 (enter drücken):");
             String StartkapitalInput = scanner.nextLine().trim();
