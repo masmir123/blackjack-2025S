@@ -1,4 +1,3 @@
-import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.IOException;
 import java.net.*;
@@ -6,6 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Spieler {
     // Netzwerkkonfiguration
@@ -20,6 +22,9 @@ public class Spieler {
     private double guthaben;
     private List<Hand> haende = new ArrayList<>();
 
+    private final AtomicBoolean isWaitingForSpecificInput = new AtomicBoolean(false);
+    private final BlockingQueue<String> inputQueue = new SynchronousQueue<>();
+
     public Spieler(String name, double startkapital, String croupierHost, int croupierPort, String kartenzaehlerHost, int kartenzaehlerPort, int spielerPort) throws SocketException, UnknownHostException {
         this.name = name;
         this.guthaben = startkapital;
@@ -33,11 +38,14 @@ public class Spieler {
         System.out.println("Spieler " + name + " lauscht auf Port: " + spielerPort);
     }
 
+    Thread listenerThread;
     public void start() {
         // Startet einen Thread, der auf eingehende Nachrichten lauscht
-        Thread listenerThread = new Thread(this::listen);
-        listenerThread.setDaemon(true); // Beendet den Thread, wenn das Hauptprogramm endet
+        listenerThread = new Thread(this::listen);
         listenerThread.start();
+
+        Thread consolelistenThread = new Thread(this::consolelisten);
+        consolelistenThread.start();
 
         // Registriert den Spieler beim Croupier
         registerWithCroupier();
@@ -57,12 +65,14 @@ public class Spieler {
 
             } catch (IOException e) {
                 System.err.println("Fehler beim Empfangen der Nachricht: " + e.getMessage());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
         }
     }
 
 
-    private void handleIncomingMessage(JSONObject message) {
+    private void handleIncomingMessage(JSONObject message) throws InterruptedException {
         String aktion = message.getString("type");
 
         switch (aktion) {
@@ -72,11 +82,12 @@ public class Spieler {
             case "make_bet":
                 this.haende.clear(); // Hände aus der Vorrunde löschen
                 System.out.println("Aufforderung zum Einsatz erhalten.\n Guthaben: " + this.guthaben + "\nBitte Einsatz eingeben: (oder Enter für Standard 100)");
-                Scanner scanner = new Scanner(System.in);
-                String input = scanner.nextLine().trim();
+                isWaitingForSpecificInput.set(true);
+                String input = inputQueue.take(); // Warte hier auf die Eingabe vom consolelistenThread
                 int bet_amount =input.isEmpty() ? 100 : Integer.parseInt(input);
                 this.haende.get(0).setEinsatz(bet_amount); // Speichern des aktuellen Einsatzes
                 PlaceBet(bet_amount);
+                isWaitingForSpecificInput.set(false);
                 break;
 
             case "receive_card":
@@ -104,16 +115,20 @@ public class Spieler {
             case "offer_surrender":
                 System.out.println("Angebot zum Aufgeben erhalten. Möchten Sie aufgeben? (j/n)\n aktuelles Guthaben: " +
                         this.guthaben+ ". Aktueller Einsatz "+ this.haende.get(0).getEinsatz() + "\n aktuelle Hand: " + this.haende);
-                Scanner scannerSurrender = new Scanner(System.in);
-                String surrenderInput = scannerSurrender.nextLine().trim();
+
+                isWaitingForSpecificInput.set(true);
+                
+                String surrenderInput = inputQueue.take();
                 if (surrenderInput.equalsIgnoreCase("j")) {
-                    // Surrender akzeptieren
                     surrender(true);
                     System.out.println("Aufgegeben. Warte auf die nächste Runde.");
                 } else {
                     surrender(false);
                     System.out.println("Aufgabe abgelehnt.");
                 }
+                
+                isWaitingForSpecificInput.set(false); 
+                
                 break;
 
             case "result":
@@ -129,6 +144,34 @@ public class Spieler {
                 break;
 
 
+        }
+    }
+
+    public void consolelisten() {
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            String input = scanner.nextLine().trim();
+
+            // Prüfen, ob ein anderer Thread auf diese Eingabe wartet
+            if (isWaitingForSpecificInput.get()) {
+                try {
+                    inputQueue.put(input);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } else {
+                if (input.equalsIgnoreCase("exit")) {
+                    System.out.println("Spieler " + name + " beendet das Spiel.");
+                    listenerThread.interrupt(); // Stoppe den Listener-Thread
+                    socket.close();
+                    System.exit(0);
+                    break;
+                } else if (input.equalsIgnoreCase("status")) {
+                    System.out.println("Aktueller Status: Guthaben: " + this.guthaben + ", Hände: " + this.haende);
+                } else {
+                    System.out.println("Unbekannter Befehl: '" + input + "'. Warte auf eine Aktion vom Croupier oder gib 'status' oder 'exit' ein.");
+                }
+            }
         }
     }
 
@@ -163,12 +206,13 @@ public class Spieler {
         System.out.println("Einsatz von " + einsatz + " gemacht.");
     }
 
-    private void makeplayerAction(int handIndex, Card croupierKarte) {
+    private void makeplayerAction(int handIndex, Card croupierKarte) throws InterruptedException {
         System.out.println("Aktuelle Hand: " + this.haende.get(handIndex));
         System.out.println("Offene Karte des Croupiers: " + croupierKarte.getRang() + " of " + croupierKarte.getFarbe());
         System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split");
-        Scanner scannerAction = new Scanner(System.in);
-        String actionInput = scannerAction.nextLine().trim().toLowerCase();
+        isWaitingForSpecificInput.set(true);
+        String actionInput = inputQueue.take().trim().toLowerCase();
+        isWaitingForSpecificInput.set(false);
         JSONObject actionMessage = new JSONObject();
         actionMessage.put("type", "action");
         actionMessage.put("action", actionInput);
@@ -225,11 +269,13 @@ public class Spieler {
     // --- MAIN METHODE ---
 
     public static void main(String[] args) {
-        try (Scanner scanner = new Scanner(System.in)) {
+        Scanner scanner = new Scanner(System.in);
+
+        try {
             System.out.println("Geben Sie die IP-Adresse des Croupiers ein (Standard: localhost (enter drücken)):");
             String croupierHost = scanner.nextLine().trim();
             if (croupierHost.isEmpty()) {
-                croupierHost = "localhost";
+                croupierHost = "127.0.0.1";
             }
 
             System.out.println("Geben Sie den Port des Croupiers ein (Standard: 5000 (enter drücken)):");
@@ -239,7 +285,7 @@ public class Spieler {
             System.out.println("Geben Sie die IP-Adresse des Kartenzählers ein (Standard: localhost (enter drücken)):");
             String kartenzaehlerHost = scanner.nextLine().trim();
             if (kartenzaehlerHost.isEmpty()) {
-                kartenzaehlerHost = "localhost";
+                kartenzaehlerHost = "127.0.0.1";
             }
 
             System.out.println("Geben Sie den Port des Kartenzählers ein (Standard: 5001 (enter drücken)):");
@@ -252,7 +298,7 @@ public class Spieler {
 
             System.out.println("Geben Sie das Startkapital an (Standard: 1000 (enter drücken):");
             String StartkapitalInput = scanner.nextLine().trim();
-            int Startkapital = spielerPortInput.isEmpty() ? 1000 : Integer.parseInt(spielerPortInput);
+            int Startkapital = StartkapitalInput.isEmpty() ? 1000 : Integer.parseInt(StartkapitalInput);
 
             System.out.println("Wie soll der Spieler heißen? (Standard: Bob (enter drücken)):");
             String Spielername = scanner.nextLine().trim();
