@@ -60,7 +60,7 @@ public class Spieler {
                 String messageStr = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
                 JSONObject message = new JSONObject(messageStr);
 
-                System.out.println("[" + name + "] Nachricht empfangen: " + message);
+                //System.out.println("[" + name + "] Nachricht empfangen: " + message);
                 handleIncomingMessage(message);
 
             } catch (IOException e) {
@@ -77,15 +77,14 @@ public class Spieler {
 
         switch (aktion) {
             case "ACK":
-                System.out.println("Erfolgreich als Spieler registriert. Warte auf Spielstart.");
+                System.out.println("Erfolgreich als Spieler registriert. Warte auf Spielstart.\n");
                 break;
             case "make_bet":
                 this.haende.clear(); // Hände aus der Vorrunde löschen
-                System.out.println("Aufforderung zum Einsatz erhalten.\n Guthaben: " + this.guthaben + "\nBitte Einsatz eingeben: (oder Enter für Standard 100)");
+                System.out.println("Aufforderung zum Einsatz erhalten.\n Guthaben: " + this.guthaben + "\nBitte Einsatz eingeben: (oder Enter für Standard 100)\n");
                 isWaitingForSpecificInput.set(true);
                 String input = inputQueue.take(); // Warte hier auf die Eingabe vom consolelistenThread
                 int bet_amount =input.isEmpty() ? 100 : Integer.parseInt(input);
-                this.haende.get(0).setEinsatz(bet_amount); // Speichern des aktuellen Einsatzes
                 PlaceBet(bet_amount);
                 isWaitingForSpecificInput.set(false);
                 break;
@@ -97,11 +96,11 @@ public class Spieler {
                 Card card = new Card(kartenObj.getString("rank"), kartenObj.getString("suit"));
                 ersteHand.addKarte(card);
 
-                System.out.println("Karte erhalten: " + card.getRang() + " of " + card.getFarbe());
+                System.out.println("Karte erhalten: " + card.getFarbe() + " of " + card.getRang());
                 break;
 
             case "your_turn":
-                System.out.println("Ich bin am Zug.");
+                System.out.println("Ich bin am Zug.\n");
                 // Die Nachricht sollte die Hand-ID enthalten, falls gesplittet wurde
                 int handIndex = message.optInt("handIndex", 0);
                 // Die Nachricht sollte auch die offenen Karten des Croupiers enthalten
@@ -121,10 +120,8 @@ public class Spieler {
                 String surrenderInput = inputQueue.take();
                 if (surrenderInput.equalsIgnoreCase("j")) {
                     surrender(true);
-                    System.out.println("Aufgegeben. Warte auf die nächste Runde.");
                 } else {
                     surrender(false);
-                    System.out.println("Aufgabe abgelehnt.");
                 }
                 
                 isWaitingForSpecificInput.set(false); 
@@ -133,14 +130,14 @@ public class Spieler {
 
             case "result":
                 // Hier können Sie die Ergebnisse der Runde verarbeiten
-                System.out.println("Runde beendet. Ergebnisse: " + message.getJSONArray("message"));
-                System.out.println("Warte auf die nächste Runde.");
+                System.out.println("Runde beendet. Ergebnisse: " + message.getString("message"));
+                System.out.println("Warte auf die nächste Runde.\n");
                 this.guthaben += message.getInt("earnings");
                 break;
 
             case "error":
                 // Hier können Sie die Ergebnisse der Runde verarbeiten
-                System.out.println("Error: " + message.getJSONArray("message"));
+                System.out.println("Error: " + message.getString("message"));
                 break;
 
 
@@ -161,7 +158,7 @@ public class Spieler {
                 }
             } else {
                 if (input.equalsIgnoreCase("exit")) {
-                    System.out.println("Spieler " + name + " beendet das Spiel.");
+                    System.out.println("Spieler " + name + " beendet das Spiel.\n");
                     listenerThread.interrupt(); // Stoppe den Listener-Thread
                     socket.close();
                     System.exit(0);
@@ -169,7 +166,7 @@ public class Spieler {
                 } else if (input.equalsIgnoreCase("status")) {
                     System.out.println("Aktueller Status: Guthaben: " + this.guthaben + ", Hände: " + this.haende);
                 } else {
-                    System.out.println("Unbekannter Befehl: '" + input + "'. Warte auf eine Aktion vom Croupier oder gib 'status' oder 'exit' ein.");
+                    System.out.println("Unbekannter Befehl: '" + input + "'. Warte auf eine Aktion vom Croupier oder gib 'status' oder 'exit' ein.\n");
                 }
             }
         }
@@ -191,8 +188,15 @@ public class Spieler {
         surrenderMessage.put("type", "surrender");
         surrenderMessage.put("answer", answer ? "yes" : "no");
         sendMessage(croupierAddress, croupierPort, surrenderMessage);
-        System.out.println("Aufgabe akzeptiert. Halber Einsatz wird zurückerstattet.");
-        this.guthaben += this.haende.get(0).getEinsatz() / 2; // Halber Einsatz zurück
+
+        if (answer) {
+            // Wenn der Spieler aufgibt, wird der halbe Einsatz zurückerstattet
+            System.out.println("Aufgabe akzeptiert. Halber Einsatz wird zurückerstattet. Warte auf die nächste Runde.\n");
+            this.guthaben += this.haende.get(0).getEinsatz() / 2; // Halber Einsatz zurück
+            this.haende.clear(); // Hände für die nächste Runde leeren
+        } else {
+            System.out.println("Aufgabe abgelehnt.\n");
+        }
     }
 
     private void PlaceBet(int einsatz) {
@@ -207,9 +211,13 @@ public class Spieler {
     }
 
     private void makeplayerAction(int handIndex, Card croupierKarte) throws InterruptedException {
+        if( handIndex < 0 || handIndex >= this.haende.size()) {
+            System.out.println("Hand nicht vorhanden.");
+            return;
+        }
         System.out.println("Aktuelle Hand: " + this.haende.get(handIndex));
         System.out.println("Offene Karte des Croupiers: " + croupierKarte.getRang() + " of " + croupierKarte.getFarbe());
-        System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split");
+        System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split\n");
         isWaitingForSpecificInput.set(true);
         String actionInput = inputQueue.take().trim().toLowerCase();
         isWaitingForSpecificInput.set(false);
@@ -233,9 +241,9 @@ public class Spieler {
                     this.guthaben -= this.haende.get(handIndex).getEinsatz(); // Verdopplung des Einsatzes
                     this.haende.get(handIndex).setEinsatz(this.haende.get(handIndex).getEinsatz() * 2);
                     sendMessage(croupierAddress, croupierPort, actionMessage);
-                    System.out.println("Double Down ausgeführt.");
+                    System.out.println("Double Down ausgeführt.\n");
                 } else {
-                    System.out.println("Nicht genug Guthaben für Double Down.");
+                    System.out.println("Nicht genug Guthaben für Double Down.\n");
                     makeplayerAction(handIndex, croupierKarte); // Wiederholen der Aktion
                 }
                 break;
@@ -246,9 +254,9 @@ public class Spieler {
                     neueHand.addKarte(this.haende.get(handIndex).getKarten().remove(1)); // Zweite Karte in die neue Hand verschieben
                     this.haende.add(neueHand);
                     sendMessage(croupierAddress, croupierPort, actionMessage);
-                    System.out.println("Split ausgeführt.");
+                    System.out.println("Split ausgeführt.\n");
                 } else {
-                    System.out.println("Split nicht möglich.");
+                    System.out.println("Split nicht möglich.\n");
                     makeplayerAction(handIndex, croupierKarte); // Wiederholen der Aktion
                 }
                 break;
