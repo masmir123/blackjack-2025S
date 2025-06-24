@@ -140,6 +140,11 @@ public class Spieler {
                 this.guthaben += message.getInt("earnings");
                 break;
 
+            case "game_started":
+                // Das Spiel hat begonnen, der Spieler kann jetzt wetten
+                System.out.println("Das Spiel hat begonnen. Warten auf Anweisung des Croupiers\n");
+                break;
+
             case "error":
                 // Hier können Sie die Ergebnisse der Runde verarbeiten
                 System.out.println("Error: " + message.getString("message"));
