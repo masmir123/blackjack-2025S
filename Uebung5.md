@@ -25,4 +25,7 @@ Deshalb haben wir die Nachrichten vom Kartenzähler nur grob notiert, und nicht 
 Robert und Christian haben sich um die Implementierung des Croupiers gekümmert, ich habe mich um den Spieler gekümmert.
 Beim Testen gab es einige Bugs, aber letztendlich haben wir es geschafft, ein Spiel lokal erfolgreich durchzuführen.
 
-
+der Fork von Christian ist hier zu finden:
+https://github.com/Chrizzly02/blackjack-2025S
+der Fork von Robert ist hier zu finden:
+https://github.com/tecnaps/blackjack-2025S
