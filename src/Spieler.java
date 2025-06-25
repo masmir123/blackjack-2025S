@@ -121,8 +121,7 @@ public class Spieler {
                 break;
 
             case "receive_card":
-                Hand ersteHand = this.haende.get(message.has("hand") ? message.getInt("hand") : 0); // Es gibt anfangs nur eine Hand, aber nach Split kann es mehrere geben
-
+                Hand ersteHand = this.haende.get(message.getInt("handIndex")); // Es gibt anfangs nur eine Hand, aber nach Split kann es mehrere geben
                 JSONObject kartenObj = message.getJSONObject("card");
                 Card card = new Card(kartenObj.getString("rank"), kartenObj.getString("suit"));
                 ersteHand.addKarte(card);
