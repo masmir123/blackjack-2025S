@@ -138,6 +138,7 @@ public class Spieler {
                 System.out.println("Runde beendet. Ergebnisse: " + message.getString("message"));
                 System.out.println("Warte auf die nächste Runde.\n");
                 this.guthaben += message.getInt("earnings");
+                this.haende.clear(); // Hände für die nächste Runde leeren
                 break;
 
             case "game_started":
