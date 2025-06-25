@@ -88,10 +88,34 @@ public class Spieler {
                 break;
             case "make_bet":
                 this.haende.clear(); // Hände aus der Vorrunde löschen
-                System.out.println("Aufforderung zum Einsatz erhalten.\n Guthaben: " + this.guthaben + "\nBitte Einsatz eingeben: (oder Enter für Standard 100)\n");
+                System.out.println("Aufforderung zum Einsatz erhalten.\n Guthaben: " + this.guthaben + "\nBitte Einsatz eingeben: (oder Enter für Standard 100)\n" +
+                        "oder 'request' eingeben, um die optimale Wette vom Kartenzähler zu erhalten.\n");
                 isWaitingForSpecificInput.set(true);
                 String input = inputQueue.take(); // Warte hier auf die Eingabe vom consolelistenThread
-                int bet_amount =input.isEmpty() ? 100 : Integer.parseInt(input);
+
+                if(input.equalsIgnoreCase("request")) {
+                    // Dem Kartenzähler eine Anfrage senden, um den optimalen Einsatz zu erhalten
+                    JSONObject betRequest = new JSONObject();
+                    betRequest.put("type", "request_bet");
+                    betRequest.put("credit", this.guthaben);
+                    sendMessage(kartenzaehlerAddress, kartenzaehlerPort, betRequest);
+                    System.out.println("Anfrage an den Kartenzähler gesendet, um den optimalen Einsatz zu erhalten.\n" +
+                            "Wenn der Kartenzähler nicht antwortet, dann ist dieser nicht aktiv.\n");
+
+                    System.out.println("Bitte Einsatz eingeben: (oder Enter für Standard 100)\n");
+                    input = inputQueue.take();
+                }
+
+                int bet_amount;
+                while (true) {
+                    try {
+                        bet_amount = input.isEmpty() ? 100 : Integer.parseInt(input);
+                        break;
+                    } catch (NumberFormatException e) {
+                        System.out.println("Ungültige Eingabe! Bitte eine Zahl eingeben (oder Enter für Standard 100):");
+                        input = inputQueue.take();
+                    }
+                }
                 PlaceBet(bet_amount);
                 isWaitingForSpecificInput.set(false);
                 break;
@@ -103,7 +127,7 @@ public class Spieler {
                 Card card = new Card(kartenObj.getString("rank"), kartenObj.getString("suit"));
                 ersteHand.addKarte(card);
 
-                System.out.println("Karte erhalten: " + card.getFarbe() + " of " + card.getRang());
+                System.out.println("Karte erhalten: " + card.getFarbe() + " of " + card.getRang()+ "\n");
                 break;
 
             case "your_turn":
@@ -151,6 +175,17 @@ public class Spieler {
                 System.out.println("Error: " + message.getString("message"));
                 break;
 
+            case "optimal_turn":
+                // Der Kartenzähler hat eine optimale Aktion berechnet
+                System.out.println("Empfohlene Aktion vom Kartenzähler: " + message.getString("move"));
+
+            case "optimal_bet":
+                // Der Kartenzähler hat eine optimale Wette berechnet
+                System.out.println("Empfohlener Einsatz vom Kartenzähler: " + message.getInt("bet"));
+
+            default:
+                System.out.println("Unbekannte Nachricht empfangen: " + message);
+                break;
 
         }
     }
@@ -194,6 +229,7 @@ public class Spieler {
         sendMessage(croupierAddress, croupierPort, registrationMessage);
     }
 
+
     private void surrender(boolean answer) {
         JSONObject surrenderMessage = new JSONObject();
         surrenderMessage.put("type", "surrender");
@@ -228,9 +264,29 @@ public class Spieler {
         }
         System.out.println("Aktuelle Hand: " + this.haende.get(handIndex));
         System.out.println("Offene Karte des Croupiers: " + croupierKarte.getRang() + " of " + croupierKarte.getFarbe());
-        System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split\n");
+        System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split\n" +
+                "oder 'request' eingeben, um die optimale Aktion vom Kartenzähler zu erhalten.\n");
         isWaitingForSpecificInput.set(true);
         String actionInput = inputQueue.take().trim().toLowerCase();
+        if (actionInput.toLowerCase().equals("request")) {
+            // Dem Kartenzähler eine Anfrage senden, um die optimale Aktion zu erhalten
+            JSONObject actionRequest = new JSONObject();
+            actionRequest.put("type", "request_turn");
+            actionRequest.put("hand", haende.get(handIndex).getKarten());
+            sendMessage(kartenzaehlerAddress, kartenzaehlerPort, actionRequest);
+            System.out.println("Anfrage an den Kartenzähler gesendet, um die optimale Aktion zu erhalten.\n" +
+                    "Wenn der Kartenzähler nicht antwortet, dann ist dieser nicht aktiv.\n");
+
+            actionInput = inputQueue.take().trim().toLowerCase();
+        }
+
+        // Prüfen, ob die Aktion gültig ist
+        if (!actionInput.equals("hit") && !actionInput.equals("stand") && !actionInput.equals("double down") && !actionInput.equals("split")) {
+            System.out.println("Ungültige Aktion. Bitte eine der folgenden Aktionen eingeben: Hit, Stand, Double Down, Split\n");
+            makeplayerAction(handIndex, croupierKarte); // Wiederholen der Aktion
+            return;
+        }
+
         isWaitingForSpecificInput.set(false);
         JSONObject actionMessage = new JSONObject();
         actionMessage.put("type", "action");
