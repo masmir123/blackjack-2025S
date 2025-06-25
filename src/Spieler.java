@@ -264,10 +264,11 @@ public class Spieler {
         }
         System.out.println("Aktuelle Hand: " + this.haende.get(handIndex));
         System.out.println("Offene Karte des Croupiers: " + croupierKarte.getRang() + " of " + croupierKarte.getFarbe());
-        System.out.println("Mögliche Aktionen: Hit, Stand, Double Down, Split\n" +
+        System.out.println("Mögliche Aktionen: Hit, Stand, DoubleDown, Split\n" +
                 "oder 'request' eingeben, um die optimale Aktion vom Kartenzähler zu erhalten.\n");
         isWaitingForSpecificInput.set(true);
         String actionInput = inputQueue.take().trim().toLowerCase();
+
         if (actionInput.toLowerCase().equals("request")) {
             // Dem Kartenzähler eine Anfrage senden, um die optimale Aktion zu erhalten
             JSONObject actionRequest = new JSONObject();
@@ -281,7 +282,7 @@ public class Spieler {
         }
 
         // Prüfen, ob die Aktion gültig ist
-        if (!actionInput.equals("hit") && !actionInput.equals("stand") && !actionInput.equals("double down") && !actionInput.equals("split")) {
+        if (!actionInput.equals("hit") && !actionInput.equals("stand") && !actionInput.equals("doubledown") && !actionInput.equals("split")) {
             System.out.println("Ungültige Aktion. Bitte eine der folgenden Aktionen eingeben: Hit, Stand, Double Down, Split\n");
             makeplayerAction(handIndex, croupierKarte); // Wiederholen der Aktion
             return;
@@ -290,7 +291,13 @@ public class Spieler {
         isWaitingForSpecificInput.set(false);
         JSONObject actionMessage = new JSONObject();
         actionMessage.put("type", "action");
-        actionMessage.put("action", actionInput);
+
+        if(actionInput.equals("doubledown")){
+            actionMessage.put("action", "double_down");
+        }else{
+            actionMessage.put("action", actionInput);
+        }
+
         actionMessage.put("handIndex", handIndex);
 
         switch (actionInput.toLowerCase()) {
@@ -303,7 +310,7 @@ public class Spieler {
                 sendMessage(croupierAddress, croupierPort, actionMessage);
                 System.out.println("Stand ausgeführt.");
                 break;
-            case "double down":
+            case "doubledown":
                 if (this.guthaben >= this.haende.get(handIndex).getEinsatz()) {
                     this.haende.get(handIndex).setEinsatz(this.haende.get(handIndex).getEinsatz() * 2);
                     sendMessage(croupierAddress, croupierPort, actionMessage);
